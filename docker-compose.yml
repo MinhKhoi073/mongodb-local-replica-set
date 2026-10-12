@@ -1,0 +1,120 @@
+version: '3.8'
+
+# ================================================================
+#  MongoDB Replica Set (rs0) – Đề tài 21
+#  Tìm hiểu và triển khai CSDL NoSQL (MongoDB) phân tán cục bộ
+#  Sinh viên: Nguyễn Minh Khôi – MSSV: 49.01.104.073
+# ================================================================
+#
+#  Kiến trúc:
+#    mongo1 (Primary)    172.20.0.11  → host:27017
+#    mongo2 (Secondary)  172.20.0.12  → host:27018
+#    mongo3 (Secondary)  172.20.0.13  → host:27019
+#
+#  Khởi động: docker compose up -d
+#  Dừng toàn bộ: docker compose down -v
+# ================================================================
+
+networks:
+  mongo-net:
+    name: mongo-replica-net
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+
+# ── Template chung cho cả 3 nodes ────────────────────────────────
+x-mongo-common: &mongo-common
+  image: mongo:7.0
+  restart: unless-stopped
+  # Ghi đè entrypoint để sao chép keyfile và đặt quyền 400
+  # trước khi gọi docker-entrypoint.sh chính thức (xử lý MONGO_INITDB)
+  entrypoint: ["/bin/bash", "-c"]
+  environment:
+    MONGO_INITDB_ROOT_USERNAME: admin
+    MONGO_INITDB_ROOT_PASSWORD: AdminPass123
+  healthcheck:
+    test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping').ok", "--quiet"]
+    interval: 10s
+    timeout: 5s
+    retries: 12
+    start_period: 45s
+
+# ── Services ──────────────────────────────────────────────────────
+services:
+
+  # ── Node 1: PRIMARY (ưu tiên cao nhất) ──────────────────────────
+  mongo1:
+    <<: *mongo-common
+    container_name: mongo1
+    hostname: mongo1
+    networks:
+      mongo-net:
+        ipv4_address: 172.20.0.11
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo1-data:/data/db
+      - ./mongo-keyfile:/auth/keyfile:ro
+    command:
+      - >-
+        install -m 0400 -o 999 -g 999 /auth/keyfile /tmp/keyfile &&
+        exec /usr/local/bin/docker-entrypoint.sh mongod
+        --replSet rs0
+        --keyFile /tmp/keyfile
+        --bind_ip_all
+        --port 27017
+
+  # ── Node 2: SECONDARY ───────────────────────────────────────────
+  mongo2:
+    <<: *mongo-common
+    container_name: mongo2
+    hostname: mongo2
+    networks:
+      mongo-net:
+        ipv4_address: 172.20.0.12
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo2-data:/data/db
+      - ./mongo-keyfile:/auth/keyfile:ro
+    command:
+      - >-
+        install -m 0400 -o 999 -g 999 /auth/keyfile /tmp/keyfile &&
+        exec /usr/local/bin/docker-entrypoint.sh mongod
+        --replSet rs0
+        --keyFile /tmp/keyfile
+        --bind_ip_all
+        --port 27017
+
+  # ── Node 3: SECONDARY ───────────────────────────────────────────
+  mongo3:
+    <<: *mongo-common
+    container_name: mongo3
+    hostname: mongo3
+    networks:
+      mongo-net:
+        ipv4_address: 172.20.0.13
+    ports:
+      - "27019:27017"
+    volumes:
+      - mongo3-data:/data/db
+      - ./mongo-keyfile:/auth/keyfile:ro
+    command:
+      - >-
+        install -m 0400 -o 999 -g 999 /auth/keyfile /tmp/keyfile &&
+        exec /usr/local/bin/docker-entrypoint.sh mongod
+        --replSet rs0
+        --keyFile /tmp/keyfile
+        --bind_ip_all
+        --port 27017
+
+# ── Named Volumes ─────────────────────────────────────────────────
+volumes:
+  mongo1-data:
+    name: mongo1-data
+  mongo2-data:
+    name: mongo2-data
+  mongo3-data:
+    name: mongo3-data
