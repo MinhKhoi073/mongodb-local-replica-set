@@ -1,9 +1,6 @@
 /**
  * init-replica.js  –  Khởi tạo MongoDB Replica Set (rs0)
- *
- * Đề tài 21: Tìm hiểu và triển khai CSDL NoSQL (MongoDB) phân tán cục bộ
- * Sinh viên : Nguyễn Minh Khôi – MSSV: 49.01.104.073
- *
+
  * Cách chạy (sau khi docker compose up -d):
  *   docker cp scripts/init-replica.js mongo1:/tmp/
  *   docker exec mongo1 mongosh -u admin -p AdminPass123 \
@@ -24,7 +21,7 @@ print("");
 const rsConfig = {
   _id: "rs0",
   members: [
-    { _id: 0, host: "mongo1:27017", priority: 2 },   // priority cao -> de tro thanh Primary
+    { _id: 0, host: "mongo1:27017", priority: 2 },
     { _id: 1, host: "mongo2:27017", priority: 1 },
     { _id: 2, host: "mongo3:27017", priority: 1 }
   ]
@@ -100,11 +97,11 @@ print("[4/4] Trang thai Replica Set hien tai:");
 try {
   const finalStatus = rs.status();
   finalStatus.members.forEach(m => {
-    const role  = m.stateStr.padEnd(12);
-    const name  = m.name.padEnd(22);
-    const state = m.stateStr === "PRIMARY"   ? "[PRIMARY  *]" :
-                  m.stateStr === "SECONDARY" ? "[SECONDARY ]" :
-                                               "[" + m.stateStr.substring(0,10) + "]";
+    const role = m.stateStr.padEnd(12);
+    const name = m.name.padEnd(22);
+    const state = m.stateStr === "PRIMARY" ? "[PRIMARY  *]" :
+      m.stateStr === "SECONDARY" ? "[SECONDARY ]" :
+        "[" + m.stateStr.substring(0, 10) + "]";
     print("      " + name + state);
   });
 } catch (e) {

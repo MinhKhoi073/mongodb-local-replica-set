@@ -2,7 +2,6 @@
 # ================================================================
 #  demo-election.sh  –  Live Demo: MongoDB Election (WSL/Linux)
 #
-#  Đề tài 21 | Nguyễn Minh Khôi | MSSV: 49.01.104.073
 #  Cách chạy: bash scripts/demo-election.sh
 # ================================================================
 
@@ -55,7 +54,6 @@ find_primary() {
 clear
 echo -e "${CYAN}╔══════════════════════════════════════════════════════════╗${NC}"
 echo -e "${CYAN}║   LIVE DEMO: MongoDB Replica Set – Automatic Election   ║${NC}"
-echo -e "${CYAN}║   Đề tài 21 │ Nguyễn Minh Khôi │ 49.01.104.073        ║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════╝${NC}"
 
 # ── BƯỚC 1 ────────────────────────────────────────────────────────
@@ -171,6 +169,6 @@ echo -e "${MAGENTA}  ━━━ BƯỚC 7: Trạng thái cuối cùng ━━━${
 show_status "Trạng thái CUỐI CÙNG"
 
 echo -e "${CYAN}  ╔════════════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}  ║  ✅ Demo hoàn tất! MongoDB HA hoạt động chính xác.   ║${NC}"
+echo -e "${CYAN}  ║  ✅ Demo hoàn tất! MongoDB hoạt động chính xác.   ║${NC}"
 echo -e "${CYAN}  ╚════════════════════════════════════════════════════════╝${NC}"
 echo ""

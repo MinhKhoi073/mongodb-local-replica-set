@@ -1,179 +1,167 @@
 # ================================================================
-#  setup.ps1  –  Thiết lập MongoDB Replica Set trên Windows
+#  setup.ps1 - Thiet lap MongoDB Replica Set tren Windows
 #
-#  Đề tài 21: CSDL NoSQL phân tán cục bộ
-#  Sinh viên : Nguyễn Minh Khôi – MSSV: 49.01.104.073
-#
-#  Cách dùng:
-#    .\scripts\setup.ps1              # Khởi tạo lần đầu
-#    .\scripts\setup.ps1 -Reset      # Xóa sạch và tạo lại
+#  Cach dung:
+#    .\scripts\setup.ps1              # Khoi tao lan dau hoac chay lai
+#    .\scripts\setup.ps1 -Reset       # Xoa sach toan bo du lieu cu va tao moi
 # ================================================================
 
 param(
-    [switch]$Reset   # Nếu có: xóa toàn bộ volume cũ và tạo lại từ đầu
+    [switch]$Reset
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 
-# ── Màu sắc terminal ──────────────────────────────────────────────
 function Write-Header ([string]$Text) {
-    $bar = "═" * 62
     Write-Host ""
-    Write-Host $bar                -ForegroundColor Cyan
-    Write-Host "  $Text"          -ForegroundColor Cyan
-    Write-Host $bar                -ForegroundColor Cyan
+    Write-Host ("==============================================================") -ForegroundColor Cyan
+    Write-Host ("  " + $Text) -ForegroundColor Cyan
+    Write-Host ("==============================================================") -ForegroundColor Cyan
 }
-function Write-Step    ([string]$T) { Write-Host "  ▶ $T" -ForegroundColor Yellow }
-function Write-OK      ([string]$T) { Write-Host "  ✓ $T" -ForegroundColor Green  }
-function Write-Warn    ([string]$T) { Write-Host "  ⚠ $T" -ForegroundColor DarkYellow }
-function Write-Fail    ([string]$T) { Write-Host "  ✗ $T" -ForegroundColor Red; exit 1 }
+function Write-Step ([string]$T) { Write-Host ("  [>] " + $T) -ForegroundColor Yellow }
+function Write-OK   ([string]$T) { Write-Host ("  [OK] " + $T) -ForegroundColor Green  }
+function Write-Warn ([string]$T) { Write-Host ("  [!] " + $T) -ForegroundColor DarkYellow }
+function Write-Fail ([string]$T) { Write-Host ("  [X] " + $T) -ForegroundColor Red; exit 1 }
 
-# ── Đường dẫn ─────────────────────────────────────────────────────
-$ScriptDir  = $PSScriptRoot
-$ProjectDir = Split-Path $ScriptDir -Parent
+$ScriptDir   = $PSScriptRoot
+$ProjectDir  = Split-Path $ScriptDir -Parent
 $KeyfilePath = Join-Path $ProjectDir "mongo-keyfile"
 $InitScript  = Join-Path $ScriptDir  "init-replica.js"
 
-# ══════════════════════════════════════════════════════════════════
 Write-Host ""
-Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║   MongoDB Replica Set – Thiết lập môi trường                ║" -ForegroundColor Cyan
-Write-Host "║   Đề tài 21 | Nguyễn Minh Khôi | MSSV: 49.01.104.073      ║" -ForegroundColor Cyan
-Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+Write-Host "==============================================================" -ForegroundColor Cyan
+Write-Host "   MongoDB Replica Set - Thiet lap moi truong Cluster         " -ForegroundColor Cyan
+Write-Host "==============================================================" -ForegroundColor Cyan
 
-# ── Bước 1: Kiểm tra Docker ───────────────────────────────────────
-Write-Header "Bước 1/7 – Kiểm tra Docker Desktop"
-Write-Step "Kiểm tra docker CLI..."
+# -- Buoc 1: Kiem tra Docker Desktop -------------------------------
+Write-Header "Buoc 1/7 - Kiem tra Docker Desktop"
+Write-Step "Kiem tra Docker CLI..."
 
-try   { docker --version | Out-Null; Write-OK "Docker CLI OK" }
-catch { Write-Fail "Docker chưa cài! Tải tại https://www.docker.com/products/docker-desktop" }
+try {
+    $dVer = docker --version
+    Write-OK ("Docker CLI OK: " + $dVer)
+} catch {
+    Write-Fail "Docker chua cai dat! Vui long tai tai https://www.docker.com/products/docker-desktop"
+}
 
-Write-Step "Kiểm tra Docker daemon..."
-try   { docker info 2>&1 | Out-Null; Write-OK "Docker daemon đang chạy" }
-catch { Write-Fail "Docker Desktop chưa khởi động! Mở Docker Desktop rồi thử lại." }
+Write-Step "Kiem tra Docker daemon..."
+try {
+    docker info 2>&1 | Out-Null
+    Write-OK "Docker daemon dang hoat dong tot"
+} catch {
+    Write-Fail "Docker Desktop chua bat! Vui long mo Docker Desktop roi chay lai."
+}
 
-# ── Bước 2: Tạo/Kiểm tra Keyfile ─────────────────────────────────
-Write-Header "Bước 2/7 – Keyfile bảo mật (Shared Secret)"
+# -- Buoc 2: Tao/Kiem tra Keyfile ----------------------------------
+Write-Header "Buoc 2/7 - Keyfile bao mat (Shared Secret)"
 
-if ($Reset -or !(Test-Path $KeyfilePath) -or (Get-Item $KeyfilePath).Length -lt 50) {
-    Write-Step "Tạo mongo-keyfile ngẫu nhiên (756 bytes, base64)..."
+$needNewKey = $Reset -or !(Test-Path $KeyfilePath)
+if (-not $needNewKey) {
+    if ((Get-Item $KeyfilePath).Length -lt 50) { $needNewKey = $true }
+}
 
+if ($needNewKey) {
+    Write-Step "Tao file mongo-keyfile ngau nhien (756 bytes, Base64)..."
     $rng   = [System.Security.Cryptography.RandomNumberGenerator]::Create()
     $bytes = New-Object byte[] 756
     $rng.GetBytes($bytes)
     $b64   = [Convert]::ToBase64String($bytes)
-    # Loại bỏ ký tự xuống dòng để MongoDB không cảnh báo
-    $b64 -replace "`r|`n", "" | Set-Content -Path $KeyfilePath -Encoding ASCII -NoNewline
-
-    Write-OK "Keyfile đã tạo: $KeyfilePath"
+    $cleanB64 = $b64 -replace "`r|`n", ""
+    [System.IO.File]::WriteAllText($KeyfilePath, $cleanB64, [System.Text.Encoding]::ASCII)
+    Write-OK ("Da tao keyfile moi tai: " + $KeyfilePath)
 } else {
-    Write-OK "Keyfile đã tồn tại ($($(Get-Item $KeyfilePath).Length) bytes)"
+    $kLen = (Get-Item $KeyfilePath).Length
+    Write-OK ("Keyfile da ton tai hop le (" + $kLen + " bytes)")
 }
 
-# ── Bước 3: Reset (nếu yêu cầu) ──────────────────────────────────
+# -- Buoc 3: Reset du lieu cu ----------------------
 if ($Reset) {
-    Write-Header "Bước 3/7 – Xóa dữ liệu cũ (--Reset)"
-    Write-Step "Xóa containers và volumes..."
+    Write-Header "Buoc 3/7 - Xoa du lieu va volume cu (-Reset)"
+    Write-Step "Dang xoa containers va volumes..."
     Push-Location $ProjectDir
     docker compose down -v 2>&1 | Out-Null
     Pop-Location
-    Write-OK "Đã xóa toàn bộ dữ liệu cũ"
+    Write-OK "Da don dep sach toan bo containers va volumes"
 } else {
-    Write-Header "Bước 3/7 – Bỏ qua Reset (dùng -Reset để xóa sạch)"
-    Write-Warn "Bỏ qua – dữ liệu hiện tại được giữ nguyên"
+    Write-Header "Buoc 3/7 - Giu nguyen du lieu (khong dung -Reset)"
+    Write-Warn "Giu nguyen du lieu va volumes hien tai"
 }
 
-# ── Bước 4: Khởi động containers ─────────────────────────────────
-Write-Header "Bước 4/7 – Khởi động 3 nodes MongoDB"
-Write-Step "Chạy docker compose up -d..."
+# -- Buoc 4: Khoi dong containers ----------------------------------
+Write-Header "Buoc 4/7 - Khoi dong 3 nodes MongoDB"
+Write-Step "Dang chay docker compose up -d..."
 
 Push-Location $ProjectDir
 docker compose up -d
-if ($LASTEXITCODE -ne 0) { Write-Fail "Lỗi khởi động Docker Compose!" }
+$composeExit = $LASTEXITCODE
 Pop-Location
-Write-OK "3 containers đã khởi động"
 
-# ── Bước 5: Chờ nodes sẵn sàng ───────────────────────────────────
-Write-Header "Bước 5/7 – Chờ MongoDB khởi tạo (30–60 giây)"
+if ($composeExit -ne 0) {
+    Write-Fail "Loi khi khoi dong Docker Compose! Kiem tra lai docker-compose.yml"
+}
+Write-OK "3 containers (mongo1, mongo2, mongo3) da khoi dong"
+
+# -- Buoc 5: Cho cac nodes san sang --------------------------------
+Write-Header "Buoc 5/7 - Cho MongoDB khoi tao (20-40 giay)"
 
 foreach ($Node in @("mongo1", "mongo2", "mongo3")) {
-    Write-Step "Chờ $Node..."
+    Write-Step ("Dang cho node " + $Node + " mo cong...")
     $ready = $false
 
     for ($i = 1; $i -le 30; $i++) {
         $out = docker exec $Node mongosh --eval "db.adminCommand('ping').ok" --quiet 2>&1
-        if ($out -match "^1") { $ready = $true; break }
+        if ($out -match "^1") {
+            $ready = $true
+            break
+        }
         Start-Sleep -Seconds 2
-        Write-Host "    [$i/30] Chờ..." -ForegroundColor DarkGray
+        Write-Host ("    [" + $i + "/30] Dang kiem tra...") -ForegroundColor DarkGray
     }
 
-    if ($ready) { Write-OK "$Node sẵn sàng" }
-    else         { Write-Fail "$Node không phản hồi sau 60 giây! Xem log: docker logs $Node" }
+    if ($ready) {
+        Write-OK ("Node " + $Node + " da san sang ket noi")
+    } else {
+        Write-Fail ("Node " + $Node + " khong phan hoi! Xem log: docker logs " + $Node)
+    }
 }
 
-# ── Bước 6: Khởi tạo Replica Set ─────────────────────────────────
-Write-Header "Bước 6/7 – Khởi tạo Replica Set rs0"
-Write-Step "Sao chép init-replica.js vào mongo1..."
+# -- Buoc 6: Khoi tao Replica Set ----------------------------------
+Write-Header "Buoc 6/7 - Khoi tao Replica Set rs0"
+Write-Step "Sao chep init-replica.js vao container mongo1..."
 docker cp $InitScript mongo1:/tmp/init-replica.js
 
-Write-Step "Chạy rs.initiate() bên trong mongo1..."
-docker exec mongo1 mongosh `
-    -u admin -p AdminPass123 `
-    --authenticationDatabase admin `
-    /tmp/init-replica.js
+Write-Step "Thuc thi rs.initiate() tren mongo1..."
+docker exec mongo1 mongosh -u admin -p AdminPass123 --authenticationDatabase admin /tmp/init-replica.js
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""
-    Write-Host "  Log mongo1 (20 dòng cuối):" -ForegroundColor Red
+    Write-Host "  Log mongo1 (20 dong cuoi):" -ForegroundColor Red
     docker logs mongo1 --tail 20
-    Write-Fail "Lỗi khởi tạo Replica Set!"
+    Write-Fail "Loi khi khoi tao Replica Set! Kiem tra log o tren."
 }
-Write-OK "Replica Set rs0 đã khởi tạo thành công!"
+Write-OK "Replica Set rs0 da khoi tao thanh cong!"
 
-# ── Bước 7: Chèn dữ liệu Demo ────────────────────────────────────
-Write-Header "Bước 7/7 – Chèn dữ liệu Demo"
-Write-Step "Thêm dữ liệu sinh viên vào demoDB.sinhvien..."
+# -- Buoc 7: Chen du lieu mau --------------------------------------
+Write-Header "Buoc 7/7 - Chen du lieu Demo mau"
+Write-Step "Them du lieu sinh vien vao demoDB.sinhvien..."
 
-$SeedScript = @'
-use demoDB;
-const count = db.sinhvien.countDocuments();
-if (count === 0) {
-  db.sinhvien.insertMany([
-    { ten: "Nguyen Van A",  mssv: "001", khoa: "CNTT", gpa: 8.5, nam: 3 },
-    { ten: "Tran Thi B",    mssv: "002", khoa: "CNTT", gpa: 9.0, nam: 2 },
-    { ten: "Le Van C",      mssv: "003", khoa: "CNTT", gpa: 7.5, nam: 4 },
-    { ten: "Pham Thi D",    mssv: "004", khoa: "CNTT", gpa: 8.8, nam: 1 },
-    { ten: "Hoang Van E",   mssv: "005", khoa: "CNTT", gpa: 7.0, nam: 3 }
-  ]);
-  print("Da chen " + db.sinhvien.countDocuments() + " ban ghi moi.");
-} else {
-  print("Da co " + count + " ban ghi. Bo qua.");
-}
-'@
+$SeedScript = "var dbDemo = db.getSiblingDB('demoDB'); if (dbDemo.sinhvien.countDocuments() === 0) { dbDemo.sinhvien.insertMany([{ ten: 'Nguyen Van A', mssv: '001', khoa: 'CNTT', gpa: 8.5, nam: 3 }, { ten: 'Tran Thi B', mssv: '002', khoa: 'CNTT', gpa: 9.0, nam: 2 }, { ten: 'Le Van C', mssv: '003', khoa: 'CNTT', gpa: 7.5, nam: 4 }, { ten: 'Pham Thi D', mssv: '004', khoa: 'CNTT', gpa: 8.8, nam: 1 }, { ten: 'Hoang Van E', mssv: '005', khoa: 'CNTT', gpa: 7.0, nam: 3 }]); print('Da chen 5 ban ghi sinh vien thanh cong.'); } else { print('Du lieu da ton tai.'); }"
 
-docker exec mongo1 mongosh `
-    -u admin -p AdminPass123 `
-    --authenticationDatabase admin `
-    --quiet `
-    --eval $SeedScript
+docker exec mongo1 mongosh -u admin -p AdminPass123 --authenticationDatabase admin --quiet --eval "$SeedScript"
 
-Write-OK "Dữ liệu demo đã sẵn sàng!"
+Write-OK "Du lieu demo da san sang trong CSDL demoDB!"
 
-# ── Xong! ─────────────────────────────────────────────────────────
+# -- Hoan tat ------------------------------------------------------
 Write-Host ""
-Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "║   HOÀN TẤT! MongoDB Replica Set rs0 đã sẵn sàng            ║" -ForegroundColor Green
-Write-Host "╠══════════════════════════════════════════════════════════════╣" -ForegroundColor Green
-Write-Host "║   mongo1 (Primary)    →  localhost:27017                    ║" -ForegroundColor White
-Write-Host "║   mongo2 (Secondary)  →  localhost:27018                    ║" -ForegroundColor White
-Write-Host "║   mongo3 (Secondary)  →  localhost:27019                    ║" -ForegroundColor White
-Write-Host "╠══════════════════════════════════════════════════════════════╣" -ForegroundColor Green
-Write-Host "║  Kết nối MongoDB Compass / mongosh:                         ║" -ForegroundColor Yellow
-Write-Host "║  mongodb://admin:AdminPass123@localhost:27017,              ║" -ForegroundColor Cyan
-Write-Host "║    localhost:27018,localhost:27019/admin?replicaSet=rs0     ║" -ForegroundColor Cyan
-Write-Host "╠══════════════════════════════════════════════════════════════╣" -ForegroundColor Green
-Write-Host "║  Lệnh tiếp theo:                                            ║" -ForegroundColor Yellow
-Write-Host "║   .\scripts\check-status.ps1      # Kiểm tra nhanh         ║" -ForegroundColor White
-Write-Host "║   .\scripts\demo-election.ps1     # Chạy Live Demo         ║" -ForegroundColor White
-Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+Write-Host "==============================================================" -ForegroundColor Green
+Write-Host "   HOAN TAT! MongoDB Replica Set rs0 da san sang 100%!       " -ForegroundColor Green
+Write-Host "==============================================================" -ForegroundColor Green
+Write-Host "   * mongo1 (Primary)    -> localhost:27017                   " -ForegroundColor White
+Write-Host "   * mongo2 (Secondary)  -> localhost:27018                   " -ForegroundColor White
+Write-Host "   * mongo3 (Secondary)  -> localhost:27019                   " -ForegroundColor White
+Write-Host "--------------------------------------------------------------" -ForegroundColor Green
+Write-Host "   Lenh kiem tra tiep theo:                                   " -ForegroundColor Yellow
+Write-Host "    .\scripts\check-status.ps1      # Kiem tra nhanh suc khoe" -ForegroundColor Cyan
+Write-Host "    .\scripts\demo-election.ps1     # Chay Live Demo Election" -ForegroundColor Cyan
+Write-Host "==============================================================" -ForegroundColor Green
 Write-Host ""
