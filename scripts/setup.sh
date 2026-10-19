@@ -2,9 +2,6 @@
 # ================================================================
 #  setup.sh  –  Thiết lập MongoDB Replica Set (WSL / Linux / macOS)
 #
-#  Đề tài 21: CSDL NoSQL phân tán cục bộ
-#  Sinh viên : Nguyễn Minh Khôi – MSSV: 49.01.104.073
-#
 #  Cách dùng:
 #    bash scripts/setup.sh           # Khởi tạo lần đầu
 #    bash scripts/setup.sh --reset   # Xóa sạch và tạo lại
@@ -29,12 +26,6 @@ log_step(){ echo -e "${YELLOW}  ▶ $1${NC}"; }
 log_ok()  { echo -e "${GREEN}  ✓ $1${NC}"; }
 log_warn(){ echo -e "${YELLOW}  ⚠ $1${NC}"; }
 log_fail(){ echo -e "${RED}  ✗ $1${NC}"; exit 1; }
-
-echo ""
-echo -e "${CYAN}╔══════════════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║  MongoDB Replica Set – Setup (WSL / Linux)              ║${NC}"
-echo -e "${CYAN}║  Đề tài 21 | Nguyễn Minh Khôi | 49.01.104.073         ║${NC}"
-echo -e "${CYAN}╚══════════════════════════════════════════════════════════╝${NC}"
 
 # ── 1. Kiểm tra Docker ────────────────────────────────────────────
 log_h "1/7 – Kiểm tra Docker"

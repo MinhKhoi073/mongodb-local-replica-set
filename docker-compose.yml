@@ -1,9 +1,3 @@
-version: '3.8'
-
-# ================================================================
-#  MongoDB Replica Set (rs0) – Đề tài 21
-#  Tìm hiểu và triển khai CSDL NoSQL (MongoDB) phân tán cục bộ
-#  Sinh viên: Nguyễn Minh Khôi – MSSV: 49.01.104.073
 # ================================================================
 #
 #  Kiến trúc:
